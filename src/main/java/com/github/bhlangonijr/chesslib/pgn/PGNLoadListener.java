@@ -16,8 +16,10 @@
 
 package com.github.bhlangonijr.chesslib.pgn;
 
+import com.github.bhlangonijr.chesslib.game.Game;
+
 public interface PGNLoadListener {
 
-    void notifyProgress(int games);
+    void notifyProgress(Game game) throws Exception;
 
 }

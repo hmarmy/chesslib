@@ -91,9 +91,6 @@ public enum Square {
     }
 
     public long getBitboard() {
-        if (this == NONE) {
-            return 0L;
-        }
         return Bitboard.getBbtable(this);
     }
 

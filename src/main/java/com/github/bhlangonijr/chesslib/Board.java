@@ -21,7 +21,6 @@ import com.github.bhlangonijr.chesslib.move.Move;
 import com.github.bhlangonijr.chesslib.move.MoveGenerator;
 import com.github.bhlangonijr.chesslib.move.MoveList;
 
-import java.util.Collections;
 import java.util.EnumMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -34,6 +33,8 @@ public class Board implements Cloneable, BoardEvent {
 
     protected final LinkedList<MoveBackup> backup;
     protected final EnumMap<BoardEventType, List<BoardEventListener>> eventListener;
+    private final EnumMap<Square, Piece> pieceOnSquare;
+    private final EnumMap<Piece, List<Square>> pieceSquares;
     private final long bitboard[];
     private final long bbSide[];
     private final EnumMap<Side, CastleRight> castleRight;
@@ -52,6 +53,8 @@ public class Board implements Cloneable, BoardEvent {
     }
 
     public Board(GameContext gameContext, boolean updateHistory) {
+        pieceOnSquare = new EnumMap<Square, Piece>(Square.class);
+        pieceSquares = new EnumMap<Piece, List<Square>>(Piece.class);
         bitboard = new long[Piece.values().length];
         bbSide = new long[Side.values().length];
         castleRight = new EnumMap<Side, CastleRight>(Side.class);
@@ -64,6 +67,12 @@ public class Board implements Cloneable, BoardEvent {
         setEnPassant(Square.NONE);
         setMoveCounter(0);
         setHalfMoveCounter(0);
+        for (Piece p : Piece.values()) {
+            pieceSquares.put(p, new CopyOnWriteArrayList<Square>());
+        }
+        for (Square s : Square.values()) {
+            pieceOnSquare.put(s, Piece.NONE);
+        }
         for (BoardEventType evt : BoardEventType.values()) {
             eventListener.put(evt, new CopyOnWriteArrayList<BoardEventListener>());
         }
@@ -125,6 +134,7 @@ public class Board implements Cloneable, BoardEvent {
         }
 
         Piece movingPiece = getPiece(move.getFrom());
+        Piece capturedPiece = getPiece(move.getTo());
         Side side = getSideToMove();
 
         backup.add(new MoveBackup(this, move));
@@ -143,54 +153,37 @@ public class Board implements Cloneable, BoardEvent {
                 }
             }
             getCastleRight().put(side, CastleRight.NONE);
-        } else if (PieceType.ROOK.equals(movingPiece.getPieceType())
-                && !CastleRight.NONE.equals(getCastleRight(side))) {
-            final Move oo = context.getRookoo(side);
-            final Move ooo = context.getRookooo(side);
+        } else if (PieceType.ROOK.equals(movingPiece.getPieceType())) {
+            if (!CastleRight.NONE.equals(getCastleRight(side))) {
+                final Move oo = context.getRookoo(side);
+                final Move ooo = context.getRookooo(side);
 
-            if (move.getFrom().equals(oo.getFrom())) {
-                if (CastleRight.KING_AND_QUEEN_SIDE.equals(getCastleRight(side))) {
-                    getCastleRight().put(side, CastleRight.QUEEN_SIDE);
-                } else {
-                    getCastleRight().put(side, CastleRight.NONE);
-                }
-            } else if (move.getFrom().equals(ooo.getFrom())) {
-                if (CastleRight.KING_AND_QUEEN_SIDE.equals(getCastleRight(side))) {
-                    getCastleRight().put(side, CastleRight.KING_SIDE);
-                } else {
-                    getCastleRight().put(side, CastleRight.NONE);
+                if (move.getFrom().equals(oo.getFrom())) {
+                    if (CastleRight.KING_AND_QUEEN_SIDE.equals(getCastleRight(side))) {
+                        getCastleRight().put(side, CastleRight.QUEEN_SIDE);
+                    } else if (CastleRight.KING_SIDE.equals(getCastleRight(side))) {
+                        getCastleRight().put(side, CastleRight.NONE);
+                    }
+                } else if (move.getFrom().equals(ooo.getFrom())) {
+                    if (CastleRight.KING_AND_QUEEN_SIDE.equals(getCastleRight(side))) {
+                        getCastleRight().put(side, CastleRight.KING_SIDE);
+                    } else if (CastleRight.QUEEN_SIDE.equals(getCastleRight(side))) {
+                        getCastleRight().put(side, CastleRight.NONE);
+                    }
                 }
             }
         }
 
-        Piece capturedPiece = movePiece(move);
+        capturedPiece = movePiece(move);
 
-        if (PieceType.ROOK.equals(capturedPiece.getPieceType())) {
-            final Move oo = context.getRookoo(side.flip());
-            final Move ooo = context.getRookooo(side.flip());
-            if (move.getTo().equals(oo.getFrom())) {
-                if (CastleRight.KING_AND_QUEEN_SIDE.equals(getCastleRight(side.flip()))) {
-                    getCastleRight().put(side.flip(), CastleRight.QUEEN_SIDE);
-                } else {
-                    getCastleRight().put(side.flip(), CastleRight.NONE);
-                }
-            } else if (move.getTo().equals(ooo.getFrom())) {
-                if (CastleRight.KING_AND_QUEEN_SIDE.equals(getCastleRight(side.flip()))) {
-                    getCastleRight().put(side.flip(), CastleRight.KING_SIDE);
-                } else {
-                    getCastleRight().put(side.flip(), CastleRight.NONE);
-                }
-            }
-        }
+        setEnPassantTarget(Square.NONE);
+        setEnPassant(Square.NONE);
 
         if (Piece.NONE.equals(capturedPiece)) {
             setHalfMoveCounter(getHalfMoveCounter() + 1);
         } else {
             setHalfMoveCounter(0);
         }
-
-        setEnPassantTarget(Square.NONE);
-        setEnPassant(Square.NONE);
 
         if (PieceType.PAWN.equals(movingPiece.getPieceType())) {
             if (Math.abs(move.getTo().getRank().ordinal() -
@@ -288,12 +281,14 @@ public class Board implements Cloneable, BoardEvent {
      * @return
      */
     public boolean hasPiece(Piece piece, Square location[]) {
+        boolean r = false;
         for (Square sq : location) {
             if (piece.equals(getPiece(sq))) {
-                return true;
+                r = true;
+                break;
             }
         }
-        return false;
+        return r;
     }
 
     /**
@@ -307,6 +302,12 @@ public class Board implements Cloneable, BoardEvent {
         setHalfMoveCounter(0);
         getHistory().clear();
 
+        for (Square sq : Square.values()) {
+            pieceOnSquare.put(sq, Piece.NONE);
+        }
+        for (Piece piece : Piece.values()) {
+            pieceSquares.get(piece).clear();
+        }
         for (int i = 0; i < bitboard.length; i++) {
             bitboard[i] = 0L;
         }
@@ -323,6 +324,8 @@ public class Board implements Cloneable, BoardEvent {
      * @param sq
      */
     public void setPiece(Piece piece, Square sq) {
+        pieceOnSquare.put(sq, piece);
+        pieceSquares.get(piece).add(sq);
         bitboard[piece.ordinal()] |= sq.getBitboard();
         bbSide[piece.getPieceSide().ordinal()] |= sq.getBitboard();
     }
@@ -334,6 +337,8 @@ public class Board implements Cloneable, BoardEvent {
      * @param sq
      */
     public void unsetPiece(Piece piece, Square sq) {
+        pieceOnSquare.put(sq, Piece.NONE);
+        pieceSquares.get(piece).remove(sq);
         bitboard[piece.ordinal()] ^= sq.getBitboard();
         bbSide[piece.getPieceSide().ordinal()] ^= sq.getBitboard();
     }
@@ -350,7 +355,7 @@ public class Board implements Cloneable, BoardEvent {
         String state = fen.substring(fen.indexOf(' ') + 1);
 
         String ranks[] = squares.split("/");
-        int file;
+        int file = 0;
         int rank = 7;
         for (String r : ranks) {
             file = 0;
@@ -391,20 +396,22 @@ public class Board implements Cloneable, BoardEvent {
 
         String flags[] = state.split(" ");
 
-        if (flags.length >= 3) {
-            String s = flags[2].toUpperCase().trim();
-            if (!s.equals("-")) {
-                Square ep = Square.valueOf(s);
-                setEnPassant(ep);
-                setEnPassantTarget(findEnPassantTarget(ep, sideToMove));
-            } else {
-                setEnPassant(Square.NONE);
-                setEnPassantTarget(Square.NONE);
-            }
-            if (flags.length >= 4) {
-                halfMoveCounter = Integer.parseInt(flags[3]);
-                if (flags.length >= 5) {
-                    moveCounter = Integer.parseInt(flags[4]);
+        if (flags != null) {
+            if (flags.length >= 3) {
+                String s = flags[2].toUpperCase().trim();
+                if (!s.equals("-")) {
+                    Square ep = Square.valueOf(s);
+                    setEnPassant(ep);
+                    setEnPassantTarget(findEnPassantTarget(ep, sideToMove));
+                } else {
+                    setEnPassant(Square.NONE);
+                    setEnPassantTarget(Square.NONE);
+                }
+                if (flags.length >= 4) {
+                    halfMoveCounter = Integer.parseInt(flags[3]);
+                    if (flags.length >= 5) {
+                        moveCounter = Integer.parseInt(flags[4]);
+                    }
                 }
             }
         }
@@ -531,12 +538,7 @@ public class Board implements Cloneable, BoardEvent {
      * @return
      */
     public Piece getPiece(Square sq) {
-        for (int i = 0; i < bitboard.length - 1; i++) {
-            if ((sq.getBitboard() & bitboard[i]) != 0L) {
-                return Piece.values()[i];
-            }
-        }
-        return Piece.NONE;
+        return pieceOnSquare.get(sq);
     }
 
     /**
@@ -575,11 +577,16 @@ public class Board implements Cloneable, BoardEvent {
      * @return
      */
     public List<Square> getPieceLocation(Piece piece) {
-        if (getBitboard(piece) != 0L) {
-            return Bitboard.bbToSquareList(getBitboard(piece));
-        }
-        return Collections.emptyList();
+        return pieceSquares.get(piece);
+    }
 
+    /**
+     * Get piece list with locations
+     *
+     * @return
+     */
+    public EnumMap<Piece, List<Square>> getPieceSquares() {
+        return pieceSquares;
     }
 
     /**
@@ -864,6 +871,9 @@ public class Board implements Cloneable, BoardEvent {
 
     /**
      * Verify if a move is legal within this board context
+     *
+     * @param move
+     * @return
      */
     public boolean isMoveLegal(Move move, boolean fullValidation) {
 
@@ -875,7 +885,7 @@ public class Board implements Cloneable, BoardEvent {
 
         if (fullValidation) {
             if (Piece.NONE.equals(fromPiece)) {
-                throw new RuntimeException("From piece cannot be null");
+                return false;
             }
 
             if (fromPiece.getPieceSide().equals(capturedPiece.getPieceSide())) {
@@ -916,6 +926,10 @@ public class Board implements Cloneable, BoardEvent {
                     }
                     return false;
                 }
+            }
+
+            if (!isAttackedBy(move)) {
+                return false;
             }
         }
         if (fromType.equals(PieceType.KING)) {
@@ -970,9 +984,7 @@ public class Board implements Cloneable, BoardEvent {
     }
 
     public boolean isAttackedBy(Move move) {
-
         PieceType pieceType = getPiece(move.getFrom()).getPieceType();
-        assert (!PieceType.NONE.equals(pieceType));
         Side side = getSideToMove();
         long attacks = 0L;
         switch (pieceType) {
@@ -1155,7 +1167,7 @@ public class Board implements Cloneable, BoardEvent {
                 }
             }
             if (result) {
-                result = getSideToMove().equals(board.getSideToMove());
+                result = result || getSideToMove().equals(board.getSideToMove());
                 result = result || getCastleRight(Side.WHITE).equals(board.getCastleRight(Side.WHITE));
                 result = result || getCastleRight(Side.BLACK).equals(board.getCastleRight(Side.BLACK));
                 result = result || getEnPassant().equals(board.getEnPassant());

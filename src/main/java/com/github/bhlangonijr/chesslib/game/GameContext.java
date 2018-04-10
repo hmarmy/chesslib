@@ -48,20 +48,10 @@ public class GameContext {
 
     protected String startFEN;
 
-    protected GameMode gameMode;
-    protected VariationType variationType;
-    protected Event event;
-
+   
+   
     public GameContext() {
-        this(GameMode.HUMAN_VS_HUMAN, VariationType.NORMAL);
-    }
-
-    public GameContext(GameMode gameMode, VariationType variationType) {
-        setGameMode(gameMode);
-        setVariationType(variationType);
-        if (variationType.equals(VariationType.NORMAL)) {
-            loadDefaults();
-        }
+        loadDefaults();
     }
 
     private void loadDefaults() {
@@ -269,28 +259,6 @@ public class GameContext {
         this.startFEN = startFEN;
     }
 
-    public GameMode getGameMode() {
-        return gameMode;
-    }
-
-    public void setGameMode(GameMode gameMode) {
-        this.gameMode = gameMode;
-    }
-
-    /**
-     * @return the variationType
-     */
-    public VariationType getVariationType() {
-        return variationType;
-    }
-
-    /**
-     * @param variationType the variationType to set
-     */
-    public void setVariationType(VariationType variationType) {
-        this.variationType = variationType;
-    }
-
     public List<Square> getWhiteooSquares() {
         return whiteooSquares;
     }
@@ -391,18 +359,4 @@ public class GameContext {
                 getWhiteoooSquaresBb() : getBlackoooSquaresBb();
     }
 
-    /**
-     * @return the event
-     */
-
-    public Event getEvent() {
-        return event;
-    }
-
-    /**
-     * @param event the event to set
-     */
-    public void setEvent(Event event) {
-        this.event = event;
-    }
 }

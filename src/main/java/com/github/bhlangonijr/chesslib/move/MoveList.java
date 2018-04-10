@@ -21,7 +21,7 @@ import com.github.bhlangonijr.chesslib.util.StringUtil;
 
 import java.util.*;
 
-public class MoveList extends LinkedList<Move> implements List<Move> {
+public class MoveList extends ArrayList<Move> implements List<Move> {
 
     private static final long serialVersionUID = -6204280556340150806L;
     private static final ThreadLocal<Board> boardHolder = new ThreadLocal<Board>() {
@@ -309,13 +309,17 @@ public class MoveList extends LinkedList<Move> implements List<Move> {
      *
      * @return
      */
+    String san = null;
     public String toSAN() throws MoveConversionException {
+        if (san==null) {
         StringBuilder sb = new StringBuilder();
         for (String sanMove : this.toSANArray()) {
             sb.append(sanMove);
             sb.append(" ");
         }
-        return sb.toString();
+        san =  sb.toString();
+        }
+        return san;
     }
 
     /**
